@@ -10,7 +10,7 @@ import os.path as osp
 from glob import glob
 import sklearn.metrics as metrics
 
-from input import Dataset
+from input import SceneNNDataset, Dataset
 
 
 currentdir = os.path.dirname(os.path.abspath(inspect.getfile(inspect.currentframe())))
@@ -127,7 +127,7 @@ def train(dataset_train, dataset_val, ckptfile='', caffemodel=''):
 
                 assert not np.isnan(loss_value), 'Model diverged with loss = NaN'
 
-                if step % 10 == 0 or step < 30:
+                if step % 1 == 0 or step < 30:
                     sec_per_batch = float(duration)
                     print '%s: step %d, loss=%.2f (%.1f examples/sec; %.3f sec/batch)' \
                          % (datetime.now(), step, loss_value,
@@ -141,8 +141,7 @@ def train(dataset_train, dataset_val, ckptfile='', caffemodel=''):
                     predictions = np.array([])
                     val_y = []
                     for val_step, (val_batch_x, val_batch_y) in \
-                            enumerate(dataset_val.batches(batch_size)):
-                            # enumerate(dataset_val.sample_batches(batch_size, g_.VAL_SAMPLE_SIZE)):
+                            enumerate(dataset_val.sample_batches(batch_size, g_.VAL_SAMPLE_SIZE)):
                         val_feed_dict = {image_: val_batch_x, 
                                          y_  : val_batch_y,
                                          keep_prob_: 1.0,
@@ -187,8 +186,8 @@ def train(dataset_train, dataset_val, ckptfile='', caffemodel=''):
 def main(argv):
     st = time.time() 
     print 'start loading data'
-    dataset_train = Dataset(g_.IMAGE_LIST_TRAIN, subtract_mean=True, name='train')
-    dataset_val = Dataset(g_.IMAGE_LIST_VAL, subtract_mean=True, name='val')
+    dataset_train = SceneNNDataset(g_.IMAGE_LIST_TRAIN, subtract_mean=True, name='train')
+    dataset_val = SceneNNDataset(g_.IMAGE_LIST_VAL, subtract_mean=True, name='val')
     print 'done loading data, time=', time.time() - st
 
     train(dataset_train, dataset_val, FLAGS.weights, FLAGS.caffemodel)

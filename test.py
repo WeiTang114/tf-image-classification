@@ -9,7 +9,7 @@ import os.path as osp
 from glob import glob
 import sklearn.metrics as metrics
 
-from input import Dataset
+from input import SceneNNDataset, Dataset
 
 currentdir = os.path.dirname(os.path.abspath(inspect.getfile(inspect.currentframe())))
 parentdir = os.path.dirname(currentdir)
@@ -118,7 +118,7 @@ def train(dataset, ckptfile):
 def main(argv):
     st = time.time() 
     print 'start loading data'
-    dataset = Dataset(g_.IMAGE_LIST_TEST, subtract_mean=True, name='test')
+    dataset = SceneNNDataset(g_.IMAGE_LIST_TEST, subtract_mean=True, name='test')
     print 'done loading data, time=', time.time() - st
 
     train(dataset, FLAGS.weights)

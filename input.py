@@ -1,4 +1,5 @@
 import cv2
+import os.path as osp
 import random
 import numpy as np
 import time
@@ -9,9 +10,10 @@ OUT_W = OUT_H = 227
 
 class Image:
     def __init__(self, path, label):
-        with open(path) as f:
-            self.label = label
-        
+        if not osp.exists(path):
+            raise IOError, 'image not found at:' + path
+            
+        self.label = label
         self.data = self._load(path)
         self.done_mean = False
         self.normalized = False
@@ -70,7 +72,12 @@ class Dataset:
 
     def load_image(self, ind):
         path, label = self[ind]
-        i = Image(path, label)       
+        try:
+            i = Image(path, label)       
+        except IOError, e:
+            print str(e)
+            return None
+
         i.crop_center()
         if self.subtract_mean:
             i.subtract_mean()
@@ -104,7 +111,9 @@ class Dataset:
 
         def load(inds, q):                    
             for ind in inds:
-                q.put(self.load_image(ind))
+                im = self.load_image(ind)
+                if im is not None:
+                    q.put(im)
 
             # indicate that I'm done
             q.put(QUEUE_END)
@@ -147,3 +156,29 @@ class Dataset:
         return len(self.image_paths)
 
 
+class SceneNNDataset(Dataset):
+    def __init__(self, imagelist_file, subtract_mean, image_size=(OUT_H, OUT_W), name='dataset'):
+
+        self.image_paths, self.labels = self._read_imagelist(imagelist_file)
+        self.shuffled = False
+        self.subtract_mean = subtract_mean
+        self.name = name
+        self.image_size = image_size
+
+        print 'image dataset "' + name + '" inited'
+        print '  total size:', len(self.image_paths)
+
+    def _read_imagelist(self, listfile):
+        paths = []
+        labels = []
+        with open(listfile) as f:
+            for l in f.readlines():
+                sceneid, imgid, clz = l.strip().split(',')
+                imgid = int(imgid)
+                clz = int(clz)
+
+                path = './data/SceneNN/images/%s/image/image%05d.png' % (sceneid, imgid)
+                paths.append(path)
+                labels.append(clz)
+   
+        return paths, labels

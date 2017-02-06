@@ -1,10 +1,10 @@
 
-IMAGE_LIST_TRAIN = './data/image/train.txt'
-IMAGE_LIST_VAL = './data/image/val.txt'
-IMAGE_LIST_TEST = './data/image/test.txt'
+IMAGE_LIST_TRAIN = './data/train.list'
+IMAGE_LIST_VAL = './data/val.list'
+IMAGE_LIST_TEST = './data/test.list'
 N_CLASSES = 40
 
-INIT_LEARNING_RATE = 0.01
+INIT_LEARNING_RATE = 0.001
 BATCH_SIZE = 32
 VAL_SAMPLE_SIZE = 256
 
