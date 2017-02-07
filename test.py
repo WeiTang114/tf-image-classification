@@ -16,6 +16,7 @@ parentdir = os.path.dirname(currentdir)
 sys.path.append(parentdir)
 import model
 import globals as g_ 
+import cv2
 
 FLAGS = tf.app.flags.FLAGS
 tf.app.flags.DEFINE_string('train_dir', 'tmp/',
@@ -69,8 +70,14 @@ def train(dataset, ckptfile):
         init_op = tf.initialize_all_variables()
         sess = tf.Session(config=tf.ConfigProto(log_device_placement=FLAGS.log_device_placement))
         
-        saver.restore(sess, ckptfile)
-        print 'restore variables done'
+        if FLAGS.caffemodel:
+            caffemodel = FLAGS.caffemodel
+            # sess.run(init_op)
+            model.load_alexnet(sess, caffemodel, fc8=True)
+            print 'loaded pretrained caffemodel:', caffemodel
+        else:
+            saver.restore(sess, ckptfile)
+            print 'restore variables done'
 
         summary_writer = tf.train.SummaryWriter(FLAGS.train_dir,
                                                 graph_def=sess.graph_def) 
@@ -84,6 +91,12 @@ def train(dataset, ckptfile):
             if step >= FLAGS.max_steps:
                 break
             step += 1
+
+            
+            if step == 1:
+                img = batch_x[0,...]
+                cv2.imwrite('img0.jpg', img)
+
 
             start_time = time.time()
             feed_dict = {image_: batch_x,
@@ -107,6 +120,8 @@ def train(dataset, ckptfile):
 
             predictions.extend(pred.tolist())
             labels.extend(batch_y.tolist())
+            # print pred
+            # print batch_y
 
         print labels
         print predictions

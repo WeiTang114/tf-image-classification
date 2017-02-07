@@ -68,15 +68,14 @@ class Dataset:
         paths, labels = zip(*[(l[0], int(l[1])) for l in path_and_labels])
         return paths, labels
 
-    def load_image(self, ind):
-        path, label = self[ind]
+    def load_image(self, path, label):
         i = Image(path, label)       
         i.crop_center()
         if self.subtract_mean:
             i.subtract_mean()
 
-        # i.normalize()
-
+	# i.normalize()
+	
         return i.data
 
     def shuffle(self):
@@ -104,13 +103,13 @@ class Dataset:
 
         def load(inds, q):                    
             for ind in inds:
-                q.put(self.load_image(ind))
+                q.put(self.load_image(paths[ind], labels[ind]))
 
             # indicate that I'm done
             q.put(QUEUE_END)
             q.close()
 
-        q = mp.Queue(maxsize=256)
+        q = mp.Queue(maxsize=1024)
 
         # background loading Shapes process
         p = mp.Process(target=load, args=(range(len(paths)), q))

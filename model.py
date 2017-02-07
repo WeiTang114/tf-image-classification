@@ -15,24 +15,47 @@ tf.app.flags.DEFINE_float('learning_rate', g_.INIT_LEARNING_RATE,
 MOVING_AVERAGE_DECAY = 0.9999     # The decay to use for the moving average.
 NUM_EPOCHS_PER_DECAY = 10.0      # Epochs after which learning rate decays.
 LEARNING_RATE_DECAY_FACTOR = 0.1  # Learning rate decay factor.
-WEIGHT_DECAY_FACTOR = 0.002 # to make l2-regularizer about the same to c-e loss
+WEIGHT_DECAY_FACTOR = 0.001 # to make l2-regularizer about the same to c-e loss
 DEFAULT_PADDING = 'SAME'
 
-def _conv(name, phase_train, in_ ,ksize, strides=[1,1,1,1], padding=DEFAULT_PADDING, batch_norm=False):
+def _conv(name, phase_train, in_ ,ksize, strides=[1,1,1,1], padding=DEFAULT_PADDING, batch_norm=False, group=1):
     
     n_kern = ksize[3]
 
     with tf.variable_scope(name, reuse=False) as scope:
         stddev = 1 / np.prod(ksize[:3], dtype=float) ** 0.5
         print name, 'stddev', stddev
-        kernel = _variable_with_weight_decay('weights', shape=ksize, stddev=stddev, wd=0.0)
-        conv = tf.nn.conv2d(in_, kernel, strides, padding=padding)
+
+        if group == 1:
+            kernel = _variable_with_weight_decay('weights', shape=ksize, stddev=stddev, wd=0.0)
+            conv = tf.nn.conv2d(in_, kernel, strides, padding=padding)
+	else:
+            ksize[2] /= group
+            kernel = _variable_with_weight_decay('weights', shape=ksize, stddev=stddev, wd=0.0)
+	    input_groups = tf.split(3, group, in_)
+	    kernel_groups = tf.split(3, group, kernel)
+            convolve = lambda i, k: tf.nn.conv2d(i, k, strides, padding=padding)
+	    output_groups = [convolve(i, k) for i, k in zip(input_groups, kernel_groups)]
+	    # Concatenate the groups
+	    conv = tf.concat(3, output_groups)
+
         biases = _variable_on_cpu('biases', [n_kern], tf.constant_initializer(0.0))
         conv = tf.nn.bias_add(conv, biases)
         conv = tf.nn.relu(conv, name=scope.name)
 
+        if batch_norm:
+            conv = batch_norm_layer(conv, phase_train, scope.name)
+
     print name, conv.get_shape().as_list()
     return conv
+
+
+def batch_norm_layer(inputT, is_training, scope):
+    return tf.cond(is_training,
+            lambda: tf.contrib.layers.batch_norm(inputT, is_training=True,
+                    center=False, updates_collections=None, scope=scope+"_bn"),
+            lambda: tf.contrib.layers.batch_norm(inputT, is_training=False,
+                    updates_collections=None, center=False, scope=scope+"_bn", reuse = True))
 
 
 def _maxpool(name, in_, ksize, strides, padding=DEFAULT_PADDING):
@@ -42,17 +65,19 @@ def _maxpool(name, in_, ksize, strides, padding=DEFAULT_PADDING):
     print name, pool.get_shape().as_list()
     return pool
 
-def _fc(name, in_, outsize, dropout=1.0):
+def _fc(name, in_, outsize, dropout=1.0, activation='relu'):
     with tf.variable_scope(name, reuse=False) as scope:
         # Move everything into depth so we can perform a single matrix multiply.
         
         insize = in_.get_shape().as_list()[-1]
-        stddev = 1 / float(insize) ** 0.5
+        stddev = (1 / float(insize)) ** 0.5
         weights = _variable_with_weight_decay('weights', shape=[insize, outsize],
                                               stddev=stddev, wd=WEIGHT_DECAY_FACTOR)
         biases = _variable_on_cpu('biases', [outsize], tf.constant_initializer(0.0))
+        # fc = tf.nn.bias_add(tf.matmul(in_, weights), biases)
         fc = tf.matmul(in_, weights) + biases
-        fc = tf.nn.relu(fc, name=scope.name)
+        if activation == 'relu':
+            fc = tf.nn.relu(fc, name=scope.name)
         fc = tf.nn.dropout(fc, dropout)
 
     print name, fc.get_shape().as_list()
@@ -67,21 +92,32 @@ def inference(image, keep_prob, phase_train):
     phase_train: bool, True for training
     """
 
-    image_summary_t = tf.image_summary(image.name, image, max_images=100)
+    # image_summary_t = tf.image_summary(image.name, image, max_images=100)
 
 
     conv1 = _conv('conv1', phase_train, image, [11, 11, 3, 96], [1, 4, 4, 1], 'VALID', batch_norm=g_.BATCH_NORM)
     lrn1 = None
+    conv1 = tf.nn.local_response_normalization(conv1, depth_radius=2,
+                                                  alpha=2e-5,
+                                                  beta=0.75,
+                                                  bias=1.0,
+                                                  name='lrn1')
+            
     pool1 = _maxpool('pool1', conv1, ksize=[1, 3, 3, 1], strides=[1, 2, 2, 1], padding='VALID')
 
-    conv2 = _conv('conv2', phase_train, pool1, [5, 5, 96, 256], batch_norm=g_.BATCH_NORM)
+    conv2 = _conv('conv2', phase_train, pool1, [5, 5, 96, 256], batch_norm=g_.BATCH_NORM, group=2)
+    conv2 = tf.nn.local_response_normalization(conv2, depth_radius=2,
+                                                  alpha=2e-5,
+                                                  beta=0.75,
+                                                  bias=1.0,
+                                                  name='lrn2')
     lrn2 = None
     pool2 = _maxpool('pool2', conv2, ksize=[1, 3, 3, 1], strides=[1, 2, 2, 1], padding='VALID')
     
     conv3 = _conv('conv3', phase_train, pool2, [3, 3, 256, 384], batch_norm=g_.BATCH_NORM)
-    conv4 = _conv('conv4', phase_train, conv3, [3, 3, 384, 384], batch_norm=g_.BATCH_NORM)
+    conv4 = _conv('conv4', phase_train, conv3, [3, 3, 384, 384], batch_norm=g_.BATCH_NORM, group=2)
 
-    conv5 = _conv('conv5', phase_train, conv4, [3, 3, 384, 256], batch_norm=g_.BATCH_NORM)
+    conv5 = _conv('conv5', phase_train, conv4, [3, 3, 384, 256], batch_norm=g_.BATCH_NORM, group=2)
     pool5 = _maxpool('pool5', conv5, ksize=[1, 3, 3, 1], strides=[1, 2, 2, 1], padding='VALID')
         
     dim = 1
@@ -91,12 +127,12 @@ def inference(image, keep_prob, phase_train):
 
     fc6 = _fc('fc6', pool5, 4096, dropout=keep_prob)
     fc7 = _fc('fc7', fc6, 4096, dropout=keep_prob)
-    fc8 = _fc('fc8', fc7, g_.N_CLASSES)
+    fc8 = _fc('fc8', fc7, g_.N_CLASSES, activation=None)
 
     return fc8
     
 
-def load_alexnet(sess, caffetf_modelpath):
+def load_alexnet(sess, caffetf_modelpath, fc8=False):
     """ caffemodel: np.array, """
 
     caffemodel = np.load(caffetf_modelpath)
@@ -104,18 +140,13 @@ def load_alexnet(sess, caffetf_modelpath):
     
     for l in ['conv1', 'conv2', 'conv3', 'conv4', 'conv5', 'fc6', 'fc7']:
         name = l
-            
-        # historical grouping by alexnet
-        if l == 'conv2' or l == 'conv4' or l == 'conv5':
-            _load_param(sess, name, data_dict[l], group=2)
-        else:
-            _load_param(sess, name, data_dict[l])
+        _load_param(sess, name, data_dict[l])
 
-def _load_param(sess, name, layer_data, group=1):
+    if fc8:
+        _load_param(sess, 'fc8', data_dict['fc8'])
+
+def _load_param(sess, name, layer_data):
     w, b = layer_data
-
-    if group != 1:
-        w = np.concatenate((w, w), axis=2) 
 
     with tf.variable_scope(name, reuse=True):
         for subkey, data in zip(('weights', 'biases'), (w, b)):
@@ -198,8 +229,8 @@ def _variable_with_weight_decay(name, shape, stddev, wd):
     Returns:
       Variable Tensor
     """
-    var = _variable_on_cpu(name, shape,
-                           tf.truncated_normal_initializer(stddev=stddev))
+    var = _variable_on_cpu(name, shape, tf.contrib.layers.xavier_initializer())
+                           # tf.truncated_normal_initializer(stddev=stddev))
     if wd:
         weight_decay = tf.mul(tf.nn.l2_loss(var), wd, name='weight_loss')
         tf.add_to_collection('losses', weight_decay)
@@ -221,9 +252,14 @@ def train(total_loss, global_step, data_size):
 
     with tf.control_dependencies([loss_averages_op]):
         # opt = tf.train.AdamOptimizer(lr)
+        # opt = tf.train.MomentumOptimizer(lr, 0.9)
         opt = tf.train.GradientDescentOptimizer(lr)
         grads = opt.compute_gradients(total_loss)
+        print 'All grads:', grads
 
+        # only fc6-8 weights and bias
+        # grads = grads[-12:]
+        # print 'fc8 grads', grads
     
     # apply gradients
     apply_gradient_op = opt.apply_gradients(grads, global_step=global_step)

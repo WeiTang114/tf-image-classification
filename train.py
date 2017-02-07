@@ -138,23 +138,32 @@ def train(dataset_train, dataset_val, ckptfile='', caffemodel=''):
                 if step % 100 == 0:# and step > 0:
                     val_losses = []
                     
+                    val_logits = []
                     predictions = np.array([])
                     val_y = []
                     for val_step, (val_batch_x, val_batch_y) in \
-                            enumerate(dataset_val.batches(batch_size)):
-                            # enumerate(dataset_val.sample_batches(batch_size, g_.VAL_SAMPLE_SIZE)):
+                            enumerate(dataset_val.sample_batches(batch_size, g_.VAL_SAMPLE_SIZE)):
+                            # enumerate(dataset_val.batches(batch_size)):
                         val_feed_dict = {image_: val_batch_x, 
                                          y_  : val_batch_y,
                                          keep_prob_: 1.0,
                                          phase_train_: False }
-                        val_loss, pred ,_= sess.run([loss, prediction, print_op], feed_dict=val_feed_dict)
+                        val_loss, pred, val_logit ,_= sess.run([loss, prediction, logits, print_op], feed_dict=val_feed_dict)
 
                         val_losses.append(val_loss)
+                        val_logits.extend(val_logit.tolist())
                         predictions = np.hstack((predictions, pred))
                         val_y.extend(val_batch_y)
 
+                    val_logits = np.array(val_logits)
+                    # print val_logits
                     # print val_y
                     # print predictions
+                    # print val_logits[0].tolist()
+                    
+                    # val_logits.dump('val_logits.npy')
+                    # predictions.dump('predictions.npy')
+                    # np.array(val_y).dump('val_y.npy')
 
                     val_loss = np.mean(val_losses)
                     acc = metrics.accuracy_score(val_y[:predictions.size], np.array(predictions))
