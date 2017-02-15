@@ -39,7 +39,7 @@ LEARNING_RATE_DECAY_FACTOR = 0.05  # Learning rate decay factor.
 np.set_printoptions(precision=3)
 
 
-def train(dataset, ckptfile):
+def test(dataset, ckptfile):
     print 'train() called'
     batch_size = FLAGS.batch_size
 
@@ -51,8 +51,7 @@ def train(dataset, ckptfile):
         startstep = 0
         global_step = tf.Variable(startstep, trainable=False)
          
-        image_ = tf.placeholder('float32', shape=(None, 227, 227, 3), name='image')
-        y_ = tf.placeholder('uint8', shape=[None], name='y')
+        image_, y_ = model.input()
         keep_prob_ = tf.placeholder('float32', name='keep_prob')
         phase_train_ = tf.placeholder(tf.bool, name='phase_train')
 
@@ -73,7 +72,7 @@ def train(dataset, ckptfile):
         if FLAGS.caffemodel:
             caffemodel = FLAGS.caffemodel
             # sess.run(init_op)
-            model.load_alexnet(sess, caffemodel, fc8=True)
+            model.load_model(sess, caffemodel, fc8=True)
             print 'loaded pretrained caffemodel:', caffemodel
         else:
             saver.restore(sess, ckptfile)
@@ -136,7 +135,7 @@ def main(argv):
     dataset = Dataset(g_.IMAGE_LIST_TEST, subtract_mean=True, name='test')
     print 'done loading data, time=', time.time() - st
 
-    train(dataset, FLAGS.weights)
+    test(dataset, FLAGS.weights)
 
 
 if __name__ == '__main__':

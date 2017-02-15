@@ -55,8 +55,7 @@ def train(dataset_train, dataset_val, ckptfile='', caffemodel=''):
         startstep = 0 if not is_finetune else int(ckptfile.split('-')[-1])
         global_step = tf.Variable(startstep, trainable=False)
         
-        image_ = tf.placeholder('float32', shape=(None, 227, 227, 3), name='image')
-        y_ = tf.placeholder('uint8', shape=[None], name='y')
+        image_, y_ = model.input()
         keep_prob_ = tf.placeholder('float32', name='keep_prob')
         phase_train_ = tf.placeholder(tf.bool, name='phase_train')
 

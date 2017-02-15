@@ -3,9 +3,14 @@ import random
 import numpy as np
 import time
 import multiprocessing as mp
+import globals as g_
 
 W = H = 256
-OUT_W = OUT_H = 227
+
+if g_.MODEL.lower() == 'alexnet':
+    OUT_W = OUT_H = 227
+elif g_.MODEL.lower() == 'vgg16':
+    OUT_W = OUT_H = 224
 
 class Image:
     def __init__(self, path, label):

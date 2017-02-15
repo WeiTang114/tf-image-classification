@@ -84,46 +84,54 @@ def _fc(name, in_, outsize, dropout=1.0, activation='relu'):
     return fc
     
 
+def input():
+    model = g_.MODEL
+    if model.lower() == 'alexnet':
+        w, h = 227, 227
+    elif model.lower() == 'vgg16':
+        w, h = 224, 224
+
+    image_ = tf.placeholder('float32', shape=(None, h, w, 3), name='image')
+    y_ = tf.placeholder('uint16', shape=[None], name='y')
+
+    return image_, y_
+
 
 def inference(image, keep_prob, phase_train):
+    model = g_.MODEL
+    print 'inferencing:', model
+    if model.lower() == 'alexnet':
+        return inference_alexnet(image, keep_prob, phase_train)
+    elif model.lower() == 'vgg16':
+        return inference_vgg16(image, keep_prob, phase_train)
+
+def inference_alexnet(image, keep_prob, phase_train):
     """
     images: N x W x H x C tensor
     keep_prob: keep rate for dropout in fc layers
     phase_train: bool, True for training
     """
 
-    # image_summary_t = tf.image_summary(image.name, image, max_images=100)
-
-
     conv1 = _conv('conv1', phase_train, image, [11, 11, 3, 96], [1, 4, 4, 1], 'VALID', batch_norm=g_.BATCH_NORM)
-    lrn1 = None
     conv1 = tf.nn.local_response_normalization(conv1, depth_radius=2,
                                                   alpha=2e-5,
                                                   beta=0.75,
                                                   bias=1.0,
                                                   name='lrn1')
-            
     pool1 = _maxpool('pool1', conv1, ksize=[1, 3, 3, 1], strides=[1, 2, 2, 1], padding='VALID')
-
     conv2 = _conv('conv2', phase_train, pool1, [5, 5, 96, 256], batch_norm=g_.BATCH_NORM, group=2)
     conv2 = tf.nn.local_response_normalization(conv2, depth_radius=2,
                                                   alpha=2e-5,
                                                   beta=0.75,
                                                   bias=1.0,
                                                   name='lrn2')
-    lrn2 = None
     pool2 = _maxpool('pool2', conv2, ksize=[1, 3, 3, 1], strides=[1, 2, 2, 1], padding='VALID')
-    
     conv3 = _conv('conv3', phase_train, pool2, [3, 3, 256, 384], batch_norm=g_.BATCH_NORM)
     conv4 = _conv('conv4', phase_train, conv3, [3, 3, 384, 384], batch_norm=g_.BATCH_NORM, group=2)
-
     conv5 = _conv('conv5', phase_train, conv4, [3, 3, 384, 256], batch_norm=g_.BATCH_NORM, group=2)
     pool5 = _maxpool('pool5', conv5, ksize=[1, 3, 3, 1], strides=[1, 2, 2, 1], padding='VALID')
         
-    dim = 1
-    for d in pool5.get_shape().as_list()[1:]:
-        dim *= d
-    pool5 = tf.reshape(pool5, [-1, dim])
+    pool5 = _flatten_featuremap(pool5)
 
     fc6 = _fc('fc6', pool5, 4096, dropout=keep_prob)
     fc7 = _fc('fc7', fc6, 4096, dropout=keep_prob)
@@ -132,21 +140,83 @@ def inference(image, keep_prob, phase_train):
     return fc8
     
 
+def inference_vgg16(image, keep_prob, phase_train):
+    """
+    images: N x W x H x C tensor
+    keep_prob: keep rate for dropout in fc layers
+    phase_train: bool, True for training
+    """
+    conv1_1 = _conv('conv1_1', phase_train, image, [3, 3, 3, 64], [1, 1, 1, 1], batch_norm=g_.BATCH_NORM)
+    conv1_2 = _conv('conv1_2', phase_train, conv1_1, [3, 3, 64, 64], [1, 1, 1, 1], batch_norm=g_.BATCH_NORM)
+    pool1 = _maxpool('pool1', conv1_2, ksize=[1, 2, 2, 1], strides=[1, 2, 2, 1])
+
+    conv2_1 = _conv('conv2_1', phase_train, pool1, [3, 3, 64, 128], batch_norm=g_.BATCH_NORM)
+    conv2_2 = _conv('conv2_2', phase_train, conv2_1, [3, 3, 128, 128], batch_norm=g_.BATCH_NORM)
+    pool2 = _maxpool('pool2', conv2_2, ksize=[1, 2, 2, 1], strides=[1, 2, 2, 1])
+    conv3_1 = _conv('conv3_1', phase_train, pool2, [3, 3, 128, 256], batch_norm=g_.BATCH_NORM)
+    conv3_2 = _conv('conv3_2', phase_train, conv3_1, [3, 3, 256, 256], batch_norm=g_.BATCH_NORM)
+    conv3_3 = _conv('conv3_3', phase_train, conv3_2, [3, 3, 256, 256], batch_norm=g_.BATCH_NORM)
+    pool3 = _maxpool('pool3', conv3_3, ksize=[1, 2, 2, 1], strides=[1, 2, 2, 1])
+    conv4_1 = _conv('conv4_1', phase_train, pool3, [3, 3, 256, 512], batch_norm=g_.BATCH_NORM)
+    conv4_2 = _conv('conv4_2', phase_train, conv4_1, [3, 3, 512, 512], batch_norm=g_.BATCH_NORM)
+    conv4_3 = _conv('conv4_3', phase_train, conv4_2, [3, 3, 512, 512], batch_norm=g_.BATCH_NORM)
+    pool4 = _maxpool('pool4', conv4_3, ksize=[1, 2, 2, 1], strides=[1, 2, 2, 1])
+    conv5_1 = _conv('conv5_1', phase_train, pool4, [3, 3, 512, 512], batch_norm=g_.BATCH_NORM)
+    conv5_2 = _conv('conv5_2', phase_train, conv5_1, [3, 3, 512, 512], batch_norm=g_.BATCH_NORM)
+    conv5_3 = _conv('conv5_3', phase_train, conv5_2, [3, 3, 512, 512], batch_norm=g_.BATCH_NORM)
+    pool5 = _maxpool('pool5', conv5_3, ksize=[1, 2, 2, 1], strides=[1, 2, 2, 1])
+        
+    pool5 = _flatten_featuremap(pool5)
+
+    fc6 = _fc('fc6', pool5, 4096, dropout=keep_prob)
+    fc7 = _fc('fc7', fc6, 4096, dropout=keep_prob)
+    fc8 = _fc('fc8', fc7, g_.N_CLASSES, activation=None)
+
+    return fc8
+
+def _flatten_featuremap(in_):
+    dim = np.prod(in_.get_shape().as_list()[1:])
+    return tf.reshape(in_, [-1, dim])
+
+def load_model(sess, caffetf_modelpath, fc8=False):
+    model = g_.MODEL
+    print 'loading model:', model
+    if model.lower() == 'alexnet':
+        load_alexnet(sess, caffetf_modelpath, fc8)
+    elif model.lower() == 'vgg16':
+        load_vgg16(sess, caffetf_modelpath, fc8)
+
 def load_alexnet(sess, caffetf_modelpath, fc8=False):
     """ caffemodel: np.array, """
 
     caffemodel = np.load(caffetf_modelpath)
     data_dict = caffemodel.item()
+    print data_dict.keys()
     
     for l in ['conv1', 'conv2', 'conv3', 'conv4', 'conv5', 'fc6', 'fc7']:
         name = l
-        _load_param(sess, name, data_dict[l])
+        _load_param(sess, name, data_dict[l], old_format=True)
 
     if fc8:
-        _load_param(sess, 'fc8', data_dict['fc8'])
+        _load_param(sess, 'fc8', data_dict['fc8'], old_format=True)
 
-def _load_param(sess, name, layer_data):
-    w, b = layer_data
+def load_vgg16(sess, caffetf_modelpath, fc8=False):
+    """ caffemodel: np.array, """
+
+    caffemodel = np.load(caffetf_modelpath)
+    data_dict = caffemodel.item()
+    layers = data_dict.keys()
+    for l in layers:
+        if l == 'fc8' and not fc8:
+            continue
+        _load_param(sess, l, data_dict[l])
+
+
+def _load_param(sess, name, layer_data, old_format=False):
+    if not old_format:
+        w, b = layer_data['weights'], layer_data['biases']
+    else:
+        w, b = layer_data
 
     with tf.variable_scope(name, reuse=True):
         for subkey, data in zip(('weights', 'biases'), (w, b)):
@@ -156,7 +226,7 @@ def _load_param(sess, name, layer_data):
                 var = tf.get_variable(subkey)
                 sess.run(var.assign(data))
             except ValueError as e: 
-                print 'varirable not found in graph:', subkey
+                print 'varirable not found in graph:', subkey, str(e)
 
 
 def loss(logits, labels):
