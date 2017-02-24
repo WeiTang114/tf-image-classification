@@ -32,12 +32,12 @@ def _conv(name, phase_train, in_ ,ksize, strides=[1,1,1,1], padding=DEFAULT_PADD
 	else:
             ksize[2] /= group
             kernel = _variable_with_weight_decay('weights', shape=ksize, stddev=stddev, wd=0.0)
-	    input_groups = tf.split(3, group, in_)
-	    kernel_groups = tf.split(3, group, kernel)
+	    input_groups = tf.split(axis=3, num_or_size_splits=group, value=in_)
+	    kernel_groups = tf.split(axis=3, num_or_size_splits=group, value=kernel)
             convolve = lambda i, k: tf.nn.conv2d(i, k, strides, padding=padding)
 	    output_groups = [convolve(i, k) for i, k in zip(input_groups, kernel_groups)]
 	    # Concatenate the groups
-	    conv = tf.concat(3, output_groups)
+	    conv = tf.concat(axis=3, values=output_groups)
 
         biases = _variable_on_cpu('biases', [n_kern], tf.constant_initializer(0.0))
         conv = tf.nn.bias_add(conv, biases)
@@ -233,7 +233,7 @@ def loss(logits, labels):
     
     labels = tf.cast(labels, tf.int32)
     ce = tf.nn.sparse_softmax_cross_entropy_with_logits(
-            logits, labels, name='cross_entropy_per_example')
+            logits=logits, labels=labels, name='cross_entropy_per_example')
     loss_mean = tf.reduce_mean(ce, name='cross_entropy')
 
     # p = tf.Print(loss_mean, [loss_mean], 'cross entropy:')
@@ -266,8 +266,8 @@ def _add_loss_summaries(total_loss):
     for l in losses + [total_loss]:
         # Name each loss as '(raw)' and name the moving average version of the loss
         # as the original loss name.
-        tf.scalar_summary(l.op.name +' (raw)', l)
-        tf.scalar_summary(l.op.name, loss_averages.average(l))
+        tf.summary.scalar(l.op.name +' (raw)', l)
+        tf.summary.scalar(l.op.name, loss_averages.average(l))
     return loss_averages_op
     
 
@@ -302,7 +302,7 @@ def _variable_with_weight_decay(name, shape, stddev, wd):
     var = _variable_on_cpu(name, shape, tf.contrib.layers.xavier_initializer())
                            # tf.truncated_normal_initializer(stddev=stddev))
     if wd:
-        weight_decay = tf.mul(tf.nn.l2_loss(var), wd, name='weight_loss')
+        weight_decay = tf.multiply(tf.nn.l2_loss(var), wd, name='weight_loss')
         tf.add_to_collection('losses', weight_decay)
     return var
 
@@ -316,7 +316,7 @@ def train(total_loss, global_step, data_size):
                                     decay_steps,
                                     LEARNING_RATE_DECAY_FACTOR,
                                     staircase=True)
-    tf.scalar_summary('learning_rate', lr)
+    tf.summary.scalar('learning_rate', lr)
     
     loss_averages_op = _add_loss_summaries(total_loss)
 
@@ -336,11 +336,11 @@ def train(total_loss, global_step, data_size):
 
     
     for var in tf.trainable_variables():
-        tf.histogram_summary(var.op.name, var)
+        tf.summary.histogram(var.op.name, var)
 
     for grad,var in grads:
         if grad is not None:
-            tf.histogram_summary(var.op.name + '/gradients', grad)
+            tf.summary.histogram(var.op.name + '/gradients', grad)
 
     variable_averages = tf.train.ExponentialMovingAverage(
             MOVING_AVERAGE_DECAY, global_step)

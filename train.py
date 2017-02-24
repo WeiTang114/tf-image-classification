@@ -65,18 +65,18 @@ def train(dataset_train, dataset_val, ckptfile='', caffemodel=''):
         train_op = model.train(loss, global_step, data_size)
 
         # build the summary operation based on the F colection of Summaries
-        summary_op = tf.merge_all_summaries()
+        summary_op = tf.summary.merge_all()
 
 
         # must be after merge_all_summaries
         validation_loss = tf.placeholder('float32', shape=(), name='validation_loss')
-        validation_summary = tf.scalar_summary('validation_loss', validation_loss)
+        validation_summary = tf.summary.scalar('validation_loss', validation_loss)
         validation_acc = tf.placeholder('float32', shape=(), name='validation_accuracy')
-        validation_acc_summary = tf.scalar_summary('validation_accuracy', validation_acc)
+        validation_acc_summary = tf.summary.scalar('validation_accuracy', validation_acc)
 
-        saver = tf.train.Saver(tf.all_variables(), max_to_keep=1000)
+        saver = tf.train.Saver(tf.global_variables(), max_to_keep=1000)
 
-        init_op = tf.initialize_all_variables()
+        init_op = tf.global_variables_initializer()
         sess = tf.Session(config=tf.ConfigProto(log_device_placement=FLAGS.log_device_placement))
         
         if is_finetune:
@@ -91,7 +91,7 @@ def train(dataset_train, dataset_val, ckptfile='', caffemodel=''):
             sess.run(init_op)
             print 'init_op done'
 
-        summary_writer = tf.train.SummaryWriter(FLAGS.train_dir,
+        summary_writer = tf.summary.FileWriter(FLAGS.train_dir,
                                                 graph=sess.graph) 
 
         step = startstep
