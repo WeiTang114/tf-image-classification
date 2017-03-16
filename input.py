@@ -127,13 +127,6 @@ class Dataset:
         QUEUE_END = '__QUEUE_END105834569xx' # just a random string
         n = len(paths)
 
-        def load(inds, q):                    
-            for ind in inds:
-                q.put(self.load_image(paths[ind], labels[ind]))
-
-            # indicate that I'm done
-            q.put(QUEUE_END)
-
         def load(inds, q, batch_size):
             n = len(inds)
             with ThreadPoolExecutor(max_workers=16) as pool:
