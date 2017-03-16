@@ -54,12 +54,35 @@ class Image:
         bottom = top + hn
         self.data = self.data[top:bottom, left:right, :]
     
+    def crop_center(self, size=(OUT_H, OUT_W)):
+        w, h = self.data.shape[0], self.data.shape[1]
+        wn, hn = size
+        left = w / 2 - wn / 2
+        top = h / 2 - hn / 2
+        self._crop(top, left, hn, wn)
+
+    def random_crop(self, size=(227,227)):
+        w, h = self.data.shape[0], self.data.shape[1]
+        wn, hn = size
+        left = random.randint(0, max(w - wn - 1, 0))
+        top = random.randint(0, max(h - hn - 1, 0))
+        self._crop(top, left, hn, wn)
+
+    def _crop(self, top, left, h, w):
+        right = left + w
+        bottom = top + h
+        self.data = self.data[top:bottom, left:right, :]
+
+    def random_flip(self):
+        if random.randint(0,1) == 1:
+            self.data = self.data[:, ::-1, :]
 
 class Dataset:
-    def __init__(self, imagelist_file, subtract_mean, image_size=(OUT_H, OUT_W), name='dataset'):
+    def __init__(self, imagelist_file, subtract_mean, is_train, image_size=(OUT_H, OUT_W), name='dataset'):
         self.image_paths, self.labels = self._read_imagelist(imagelist_file)
         self.shuffled = False
         self.subtract_mean = subtract_mean
+        self.is_train = is_train
         self.name = name
         self.image_size = image_size
 
@@ -78,12 +101,16 @@ class Dataset:
     def load_image(self, path_label):
         path, label = path_label
         i = Image(path, label)       
-        i.crop_center()
+
+        if not self.is_train:
+            i.crop_center()
+        else:
+            i.random_crop()
+            i.random_flip()
+
         if self.subtract_mean:
             i.subtract_mean()
 
-	# i.normalize()
-	
         return i.data
 
     def shuffle(self):

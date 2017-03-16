@@ -200,8 +200,8 @@ def train(dataset_train, dataset_val, ckptfile='', caffemodel=''):
 def main(argv):
     st = time.time() 
     print 'start loading data'
-    dataset_train = Dataset(g_.IMAGE_LIST_TRAIN, subtract_mean=True, name='train')
-    dataset_val = Dataset(g_.IMAGE_LIST_VAL, subtract_mean=True, name='val')
+    dataset_train = Dataset(g_.IMAGE_LIST_TRAIN, subtract_mean=True, is_train=True, name='train')
+    dataset_val = Dataset(g_.IMAGE_LIST_VAL, subtract_mean=True, is_train=False, name='val')
     print 'done loading data, time=', time.time() - st
 
     train(dataset_train, dataset_val, FLAGS.weights, FLAGS.caffemodel)
