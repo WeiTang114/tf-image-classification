@@ -46,15 +46,6 @@ class Image:
             self.normalized = True
     
     def crop_center(self, size=(OUT_H, OUT_W)):
-        h, w = self.data.shape[0], self.data.shape[1]
-        hn, wn = size
-        top = h / 2 - hn / 2
-        left = w / 2 - wn / 2
-        right = left + wn
-        bottom = top + hn
-        self.data = self.data[top:bottom, left:right, :]
-    
-    def crop_center(self, size=(OUT_H, OUT_W)):
         w, h = self.data.shape[0], self.data.shape[1]
         wn, hn = size
         left = w / 2 - wn / 2
