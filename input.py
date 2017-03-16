@@ -151,8 +151,6 @@ class Dataset:
         t.start()
 
         h, w = self.image_size
-        x = np.zeros((batch_size, h, w, 3)) 
-        y = np.zeros(batch_size)
 
         for i in xrange(0, n, batch_size):
             starttime = time.time()
