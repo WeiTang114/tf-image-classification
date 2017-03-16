@@ -76,9 +76,14 @@ def train(dataset_train, dataset_val, ckptfile='', caffemodel=''):
 
         saver = tf.train.Saver(tf.global_variables(), max_to_keep=1000)
 
-        init_op = tf.global_variables_initializer()
-        sess = tf.Session(config=tf.ConfigProto(log_device_placement=FLAGS.log_device_placement))
+        init_op = tf.initialize_all_variables()
+
+        # gpu_options = tf.GPUOptions(per_process_gpu_memory_fraction=0.333)
+        # sess = tf.Session(config=tf.ConfigProto(log_device_placement=FLAGS.log_device_placement, 
+                                                # gpu_options=gpu_options))
         
+        sess = tf.Session(config=tf.ConfigProto(log_device_placement=FLAGS.log_device_placement))
+
         if is_finetune:
             saver.restore(sess, ckptfile)
             print 'restore variables done'

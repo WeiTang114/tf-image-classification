@@ -2,8 +2,10 @@ import cv2
 import random
 import numpy as np
 import time
-import multiprocessing as mp
+import Queue
+import threading
 import globals as g_
+from concurrent.futures import ThreadPoolExecutor
 
 W = H = 256
 
@@ -73,7 +75,8 @@ class Dataset:
         paths, labels = zip(*[(l[0], int(l[1])) for l in path_and_labels])
         return paths, labels
 
-    def load_image(self, path, label):
+    def load_image(self, path_label):
+        path, label = path_label
         i = Image(path, label)       
         i.crop_center()
         if self.subtract_mean:
@@ -112,15 +115,29 @@ class Dataset:
 
             # indicate that I'm done
             q.put(QUEUE_END)
-            q.close()
 
-        q = mp.Queue(maxsize=1024)
+        def load(inds, q, batch_size):
+            n = len(inds)
+            with ThreadPoolExecutor(max_workers=16) as pool:
+                for i in range(0, n, batch_size):
+                    sub = inds[i: i + batch_size] if i < n-1 else [inds[-1]]
+                    sub_paths = [paths[j] for j in sub]
+                    sub_labels = [labels[j] for j in sub]
+                    images = list(pool.map(self.load_image, zip(sub_paths, sub_labels)))
+                    images_data = np.array(images)
+                    sub_labels = np.array(sub_labels)
+                    q.put((images_data, sub_labels))
 
-        # background loading Shapes process
-        p = mp.Process(target=load, args=(range(len(paths)), q))
+            # indicate that I'm done
+            q.put(None)
+
+        q = Queue.Queue(maxsize=1024)
+
+        # background loading images thread
+        t = threading.Thread(target=load, args=(range(len(paths)), q, batch_size))
         # daemon child is killed when parent exits
-        p.daemon = True
-        p.start()
+        t.daemon = True
+        t.start()
 
         h, w = self.image_size
         x = np.zeros((batch_size, h, w, 3)) 
@@ -129,19 +146,11 @@ class Dataset:
         for i in xrange(0, n, batch_size):
             starttime = time.time()
             
-            # print 'q size', q.qsize() 
-
-            for j in xrange(batch_size):
-                im = q.get()
-
-                # queue is done
-                if im == QUEUE_END: 
-                    x = np.delete(x, range(j, batch_size), axis=0)
-                    y = np.delete(y, range(j, batch_size), axis=0)
-                    break
-                
-                x[j, ...] = im 
-                y[j] = labels[i + j] 
+            item = q.get()
+            if item == QUEUE_END:
+                break
+            
+            x, y = item
             
             # print 'load batch time:', time.time()-starttime, 'sec'
             yield x, y
